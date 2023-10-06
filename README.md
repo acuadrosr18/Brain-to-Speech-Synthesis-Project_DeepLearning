@@ -10,6 +10,6 @@
 > Basic task: train/valid/test set from single speaker.
 >
 > Related materials:
-> - https://github.com/neuralinterfacinglab/SingleWordProductionDutch
+> - [Single Word Production - Github](https://github.com/neuralinterfacinglab/SingleWordProductionDutch)
 > - M. Verwoert, M. C. Ottenhoff, S. Goulis, A. J. Colon, L. Wagner, S. Tousseyn, J. P. van Dijk, P. L. Kubben, and C. Herff, “Dataset of Speech Production in intracranial Electroencephalography,” Scientific Data 2022 9:1, vol. 9, no. 1, pp. 1–9, jul 2022. [Online](https://www.nature.com/articles/s41597-022-01542-9)
 
