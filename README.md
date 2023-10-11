@@ -30,7 +30,6 @@ As part of the project we will replace the linear regression model with deep neu
 
 - Data source
 - Data exploration and visualization 
-- Data preparation for training, validation and test.
-
+- Data preparation for training
 In the **Brain-to-Speech-Synthesis-Project_DeepLearning** Github Repository we can find the README.md file with the summary of the project, and the .IPYNB file which contains the resolution of the Milestone #1 of the project.
 
