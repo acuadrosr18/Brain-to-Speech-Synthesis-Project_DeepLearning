@@ -217,48 +217,24 @@ with h5py.File(ieeg_nwb_path, 'r') as nwbfile:
 # Print the root-level keys in the HDF5 file
   print(list(nwbfile.keys()))
 
-
-
-# Open the .nwb file
-path_to_file = "/content/SingleWordProductionDutch-iBIDS/sub-01/ieeg/sub-01_task-wordProduction_ieeg.nwb"
-with NWBHDF5IO(path_to_file, 'r') as io:
-  nwbfile = io.read()
-
-
-  audio_data_sample = nwbfile.acquisition['Audio'].data[:10]
-  stimulus_data_sample = nwbfile.acquisition['Stimulus'].data[:10]
-  ieeg_data_sample = nwbfile.acquisition['iEEG'].data[:10]
-
-print("Audio data:", audio_data_sample)
-print("Stimulus data:", stimulus_data_sample)
-print("iEEG data (first 5 channels):", ieeg_data_sample[:, :5])
-
 """### 2.2.5 Descriptions of recording aspects and of specific .tsv columns"""
 
 # 5. Load the first JSON file
 
 import json
-
-# Specify the path to the JSON file
 path_to_json = "/content/SingleWordProductionDutch-iBIDS/sub-01/ieeg/sub-01_task-wordProduction_space-ACPC_coordsystem.json"
-
-# Load the JSON file
 with open(path_to_json, 'r') as json_file:
     data_description = json.load(json_file)
 
-# Print the contents
 print(json.dumps(data_description, indent = 2))
 
 # 5. Load the second JSON file
 
-# Define the path to the JSON file
-file_path = '/content/SingleWordProductionDutch-iBIDS/sub-01/ieeg/sub-01_task-wordProduction_ieeg.json'
+path_to_json2= '/content/SingleWordProductionDutch-iBIDS/sub-01/ieeg/sub-01_task-wordProduction_ieeg.json'
 
-# Open and load the JSON data
-with open(file_path, 'r') as json_file:
+with open(path_to_json2, 'r') as json_file:
     data = json.load(json_file)
 
-# Print the contents of the JSON file
 print(json.dumps(data, indent=4))
 
 """## 2.3 Derivatives Data
@@ -407,35 +383,3 @@ plt.ylabel('Channel')
 plt.title('iEEG Data Visualization')
 plt.colorbar(label='Amplitude')
 plt.show()
-
-"""#?splitting?"""
-
-from sklearn.model_selection import train_test_split
-ieeg_train, ieeg_temp = train_test_split(ieeg_tensor, test_size=0.2, random_state=42)
-ieeg_val, ieeg_test = train_test_split(X_temp, test_size=0.5, random_state=42)
-
-"""3.3 Data Exploration
- - Statistical Analysis
-
-3.4 Data Cleaning
-- Should we do the missing values, remove outliers, etc.
-3.5 Data Transformation
-
-3.6 Data Augmentation (should we use the audio or stimulus)
-
-3.7 Feature Extraction
-
-3.8 Data Splitting
-
-3.9 Data Serialization
-
-3.10 Data Pipeline Creation
-
-4. Final output: training, validation and test inputs and outputs.
-
-  4.1 Training
-
-  4.2 Validation
-
-  4.3 Test inputs and outputs
-"""
