@@ -31,5 +31,18 @@ As part of the project we will replace the linear regression model with deep neu
 - Data source
 - Data exploration and visualization 
 - Data preparation for training
+
 In the **Brain-to-Speech-Synthesis-Project_DeepLearning** Github Repository we can find the README.md file with the summary of the project, and the .IPYNB file which contains the resolution of the Milestone #1 of the project.
+
+# Milestone 2: Baseline evaluation, Baseline model 2023.11.08
+- Efficient loading of data
+- Optional: Baseline model (can be a simpler, easier to understand model, e.g. rule-based, linear/logistic regression, simple neural network, etc.)
+- Deep learning model, that can be trained (it's OK if it is not precise enough or cannot generalize yet).
+- Evaluation (testing the prediction, or using metrics commonly used in the field).
+
+Included in this Milestone is:
+- Define the Software environment (e.g. requirements.txt, Dockerfile, etc.)
+- how to run the pipeline
+- what to run for the training (preferred: .IPYNB with results)
+- what to run for evaluation  (preferred: .IPYNB with images
 
