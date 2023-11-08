@@ -36,13 +36,34 @@ In the **Brain-to-Speech-Synthesis-Project_DeepLearning** Github Repository we c
 
 # Milestone 2: Baseline evaluation, Baseline model 2023.11.08
 - Efficient loading of data
-- Optional: Baseline model (can be a simpler, easier to understand model, e.g. rule-based, linear/logistic regression, simple neural network, etc.)
-- Deep learning model, that can be trained (it's OK if it is not precise enough or cannot generalize yet).
-- Evaluation (testing the prediction, or using metrics commonly used in the field).
+- Deep learning model: SpectrogramReconstructionNet
+- Evaluation: For Linear Regression and for Deep Learning Model.
 
-Included in this Milestone is:
-- Define the Software environment (e.g. requirements.txt, Dockerfile, etc.)
-- how to run the pipeline
-- what to run for the training (preferred: .IPYNB with results)
-- what to run for evaluation  (preferred: .IPYNB with images
+## How to Run the Pipeline
+Detailed instructions on how to run the pipeline are as follows:
+
+1. Installation:
+ Ensure you have Python installed and then set up the environment using the `requirements.txt` file as shown above.
+ 
+2. Data Loading:
+ This notebook contains all necessary code to load the data.
+ 
+3. Model Training:
+This notebook contains all necessary code and displays the results inline.
+
+4. Evaluation:
+It will output evaluation metrics and optionally, visualizations comparing true values against predictions.
+
+### Running the Training
+This notebook includes:
+- Data preprocessing.
+- Model definition and setup.
+- The training loop with output metrics.
+
+### Running the Evaluation
+For evaluation this code will:
+- Load the best performing model.
+- Run the model against the test data.
+- Output the evaluation metrics.
+- Include visualizations of results.
 
