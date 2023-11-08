@@ -3,7 +3,6 @@ h5py==3.9.0
 matplotlib==3.7.1
 nibabel==4.0.2
 numpy==1.23.5
-numpy.matlib==1.23.5
 pandas==1.5.3
 pynwb==2.5.0
 pytorch_lightning==2.1.1
