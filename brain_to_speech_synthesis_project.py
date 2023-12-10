@@ -16,39 +16,43 @@ The dataset is based on 10 participants reading out individual words while being
 """
 
 # This command installs all the necessary dependencies listed in the requirements.txt file.
-# Ensure you have an internet connection so that pip can download the packages.
 
 !pip install -r https://raw.githubusercontent.com/acuadrosr18/Brain-to-Speech-Synthesis-Project_DeepLearning/main/requirements.txt
 
 # Install every library that we will need for the development of the project
 
-!pip install numpy scipy scikit-learn pandas pynwb nilearn nibabel RutishauserLabtoNWB pytorch-lightning --quiet
+!pip install pynwb RutishauserLabtoNWB pytorch-lightning nilearn optuna --quiet
 
+import gdown
 import numpy as np
 import scipy
 import sklearn
 import pandas as pd
+import seaborn as sns
 import pynwb
 import matplotlib.pyplot as plt
-import numpy as np
 import nibabel as nib
-from nilearn import plotting
 import RutishauserLabtoNWB as RLab
-
 import pytorch_lightning as pl
-
 import torch
-from torch import nn
-from torch.nn import functional as F
-from torch.utils.data import random_split, DataLoader
-
-from torchmetrics import Accuracy
-
-from torchvision import transforms
-
+import os
+import h5py
+import matplotlib
+import nilearn
+import librosa
+import optuna
 import gdown
 import zipfile
-import os
+from nilearn import plotting
+from torch import nn
+from torch.nn import functional as F
+from torch.utils.data import TensorDataset
+from torch.utils.data import random_split, DataLoader
+from torchmetrics import Accuracy
+from torchvision import transforms
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, r2_score
 
 url = 'https://drive.google.com/uc?id=1qxgBuJo5yhqa9qDuGTC2VUZ5y2uus6Cc'
 
@@ -395,7 +399,7 @@ plt.show()
 - Deep Learning Model
 - Evaluation
 
-## 4.1 Efficient loading of data
+## **4.1 Efficient loading of data**
 
 We compute the **extract_features script**:
 
@@ -415,7 +419,6 @@ This script was designed to process and extract features from both electroenceph
   - Call defined functions to process the EEG data (extractHG and stackFeatures), decimate and save the audio data, extract Mel spectrograms (extractMelSpecs), and downsample the labels (downsampleLabels).
   - Aligns the EEG features with the audio features and downsamples labels.
   - Handles any potential mismatch in the number of windows between different feature sets by truncating them to the minimum common length.
-  - Creates feature names for the stacked features and saves all the processed data to disk.
 """
 
 import os
@@ -656,16 +659,15 @@ if __name__=="__main__":
 
 """The next image shows a plot of EEG feature values over time, which have been smoothed to reduce noise.
 
-The horizontal axis represents sequential time windows, while the vertical axis shows the EEG features after smoothing.
+The horizontal axis represents sequential time windows, while the vertical axis shows the EEG feature values after smoothing.
 
 The plot contains multiple overlapping lines in various colors, indicating multiple EEG features plotted together.
 
-The dense, colorful lines suggest that the features often change simultaneously, and some distinct spikes suggest moments of higher readings.
+The colorful lines suggest that the features often change simultaneously, and some distinct spikes suggest moments of higher readings.
 
 Overall, the smoothing process helps to reveal the underlying trends in the EEG data by dampening short-term fluctuations.
 """
 
-import seaborn as sns
 window_size = 10  # Adjust the window size to control the level of smoothing.
 smoothed_feat = np.apply_along_axis(lambda x: np.convolve(x, np.ones(window_size)/window_size, mode='same'), axis=1, arr=feat[:, ::100])
 
@@ -676,23 +678,26 @@ plt.ylabel('Smoothed EEG Feature Values')
 plt.title('Smoothed EEG Feature Visualization')
 plt.show()
 
-"""The next image displays a heatmap for EEG channel data over time. With a large number of channels (over 1100) and numerous time windows, the visualization primarily shows uniformity in the feature values, which are predominantly lower as indicated by the blue color.
+"""The next image displays a heatmap for EEG channel data over time. The visualization primarily shows uniformity in the feature values, which are predominantly lower as indicated by the blue color.
 
 There are no immediately noticeable patterns or anomalies, suggesting stable EEG readings across the channels and throughout the time recorded.
 """
 
 plt.figure(figsize=(15, 6))
 sns.heatmap(feat.T, cmap='coolwarm')
-plt.xticks(rotation=45)  # To rotate the tick labels by 45 degrees.
+plt.xticks(rotation=45)
 plt.xlabel('Time Windows')
-plt.ylabel('EEG Channels')
+plt.ylabel('Stacked Features')
 plt.title('EEG Feature Heatmap')
 plt.show()
 
-"""We compute **reconstruction_minimal script**, this script is part of a speech process pipeline tries to reconstruct the original audio signal from the spectogram. The reconstruction quality is assessed by comparing the predicted spectrogram to the original, both visually and statistically, and the results are saved for further analysis.
+"""## **4.2 Linear Regression Approach**
+
+We compute **reconstruction_minimal script**, this script is part of a speech process pipeline tries to reconstruct the original audio signal from the spectogram. The reconstruction quality is assessed by comparing the predicted spectrogram to the original, both visually and statistically, and the results are saved for further analysis.
 
 
 1. Define a Function (createAudio): This function takes a spectrogram and generates a reconstructed audio waveform from it. It performs this by converting logarithmic Mel spectrogram values back to a frequency spectrum, which is then used to synthesize the time-domain waveform using an overlap-add method.
+
 2. Main Workflow:
     - Specifies parameters for audio processing (window length, frame shift, sample rate).
     - Loads participant-specific data (spectrogram, features, processed words, and feature names).
@@ -856,21 +861,14 @@ rs = np.load(os.path.join(result_path, 'linearResults.npy'))
 mean_correlations = np.mean(rs, axis=0)
 
 # Create a bar plot
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(8,3.5))
 plt.bar(range(mean_correlations.shape[0]), mean_correlations)
 plt.xlabel('Spectrogram Bin')
 plt.ylabel('Mean Correlation Coefficient')
 plt.title('Mean Correlation Coefficients for Each Spectrogram Bin')
 plt.show()
 
-"""The provided Python code performs a process where audio signals are reconstructed from spectrogram data using machine learning techniques.
-
-The code uses Linear Regression to predict spectrogram bins, which represent different frequency ranges from extracted audio features.
-
-The predictions are evaluated using Pearson correlation coefficients across a 10-fold cross-validation to measure the accuracy of the reconstruction.
-
-The graph shows the mean Pearson correlation coefficients for each spectrogram bin. The high values depicted in the graph, mostly above 0.8, indicate a strong positive correlation between the predicted and actual spectrogram data, suggesting that the model is quite accurate in reconstructing the audio signal across its frequency spectrum.
-"""
+"""The graph shows the mean Pearson correlation coefficients for each spectrogram bin. The high values depicted in the graph, mostly above 0.8, indicate a strong positive correlation between the predicted and actual spectrogram data, suggesting that the model is quite accurate in reconstructing the audio signal across its frequency spectrum."""
 
 # Load random baseline results
 random_results = np.load(os.path.join(result_path, 'randomResults.npy'))
@@ -878,8 +876,8 @@ random_results = np.load(os.path.join(result_path, 'randomResults.npy'))
 # Create a box plot
 plt.figure(figsize=(10, 6))
 plt.boxplot(random_results, vert=False)
-plt.xlabel('Spectrogram Bin')
-plt.ylabel('Correlation Coefficient')
+plt.xlabel('Correlation Coefficient')
+plt.ylabel('Spectrogram Bin')
 plt.title('Random Baseline Comparison')
 plt.show()
 
@@ -896,13 +894,14 @@ This could serve as a baseline to assess the performance of predictive models ag
 """
 
 # Load original and reconstructed spectrograms
-original_spec = np.load(os.path.join(feat_path, f'{pt}_spec.npy'))
+original_spec = np.load('/content/features/sub-06_spec.npy')
 reconstructed_spec = np.load(os.path.join(result_path, f'{pt}_predicted_spec.npy'))
 
 # Plot original spectrogram
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(12, 4))
 plt.subplot(1, 2, 1)
 plt.imshow(original_spec.T, aspect='auto', origin='lower', cmap='viridis')
+plt.colorbar(label='Intensity')
 plt.title('Original Spectrogram')
 plt.xlabel('Time Frame')
 plt.ylabel('Frequency Bin')
@@ -910,6 +909,7 @@ plt.ylabel('Frequency Bin')
 # Plot reconstructed spectrogram
 plt.subplot(1, 2, 2)
 plt.imshow(reconstructed_spec.T, aspect='auto', origin='lower', cmap='viridis')
+plt.colorbar(label='Intensity')
 plt.title('Reconstructed Spectrogram')
 plt.xlabel('Time Frame')
 plt.ylabel('Frequency Bin')
@@ -917,9 +917,9 @@ plt.ylabel('Frequency Bin')
 plt.tight_layout()
 plt.show()
 
-"""The provided code is part of a script for visual comparison of original and reconstructed spectrogram data.
+"""The reconstructed spectrogram closely mimics the original in pattern and structure.
 
-The spectrograms visually appear quite similar, suggesting that the reconstructed spectrogram closely mimics the original in pattern and structure.
+We are selecting a Timeframe and visualize it, comparing the original Spectrogram vs the Reconstructed by Linear Regression.
 """
 
 import os
@@ -930,20 +930,12 @@ import scipy.io.wavfile as wavfile
 
 if __name__=="__main__":
 
-    result_path = r'/content/results'
-    #Load correlation results
-    allRes = np.load(os.path.join(result_path,'/content/results/linearResults.npy'))
-
-    colors = ['C' + str(i) for i in range(10)]
-
-    # Viz example spectrogram
-    #Load words and spectrograms
-    feat_path = r'/content/results'
+    result_path = '/content/results'
+    feat_path = '/content/features'
     participant = 'sub-06'
     #Which timeframe to plot
-    start_s = 5.5
-    stop_s=19.5
-
+    start_s = 0.4
+    stop_s= 29.5
     frameshift = 0.01
     #Load spectrograms
     rec_spec = np.load(os.path.join(result_path, f'/content/results/sub-06_predicted_spec.npy'))
@@ -954,7 +946,9 @@ if __name__=="__main__":
     words = [words[w] for w in np.arange(1,len(words)) if words[w]!=words[w-1] and words[w]!='']
 
     cm='viridis'
-    fig, ax = plt.subplots(2, sharex=True)
+    fig, ax = plt.subplots(2, sharex=True, figsize=(20, 8))
+
+    fig.suptitle('Spectrogram Visualization', fontsize=12)
 
     #Plot spectrograms
     pSta=int(start_s*(1/frameshift));pSto=int(stop_s*(1/frameshift))
@@ -962,12 +956,13 @@ if __name__=="__main__":
     ax[0].set_ylabel('Log Mel-Spec Bin')
     ax[1].imshow(np.flipud(rec_spec[pSta:pSto, :].T), cmap=cm, interpolation=None,aspect='auto')
     plt.setp(ax[1], xticks=np.arange(0,pSto-pSta,int(1/frameshift)), xticklabels=[str(x/int(1/frameshift)) for x in np.arange(0,pSto-pSta,int(1/frameshift))])
-    plt.setp(ax[1], xticks= np.linspace(0, pSto - pSta, num=len(words), endpoint=False), xticklabels=words)
+
+    num_ticks = len(np.arange(int(1/frameshift), spectrogram[pSta:pSto, :].shape[0], 3*int(1/frameshift)))
+    displayed_words = words[:num_ticks]
+    plt.setp(ax[1], xticks=np.arange(int(1/frameshift), spectrogram[pSta:pSto, :].shape[0], 3*int(1/frameshift)), xticklabels=displayed_words)
     ax[1].set_ylabel('Log Mel-Spec Bin')
 
-    # Rotate x-axis labels for spectrogram
-    plt.setp(ax[1], xticks=np.linspace(0, pSto - pSta, num=len(words), endpoint=False))
-    ax[1].set_xticklabels(words, rotation=90)
+""" The visible patterns across both suggest that the deep learning model has effectively captured the primary features of the speech signal, as evidenced by the similar distribution of energy (bright areas) corresponding to spoken words."""
 
 # Viz waveforms
     # Load waveforms
@@ -976,15 +971,16 @@ if __name__=="__main__":
 
     orig = audio[int(start_s*rate):int(stop_s*rate)]
     rec = recAudio[int(start_s*rate):int(stop_s*rate)]
-    f, axarr = plt.subplots(2, sharex=True)
+    f, axarr = plt.subplots(2, sharex=True, figsize=(20, 8))
     axarr[0].plot(orig)
     axarr[1].plot(rec)
 
     #Axis
-    xts = np.linspace(0, orig.shape[0], num=len(words), endpoint=False)
+    xts = np.linspace(0, orig.shape[0], num=len(displayed_words), endpoint=False)
     axarr[1].set_xticks(xts)
-    axarr[1].set_xticklabels(words)
-    axarr[0].set_xlim([0,orig.shape[0]])
+    axarr[1].set_xticklabels(displayed_words)
+    axarr[0].set_xlim([0, orig.shape[0]])
+    axarr[1].set_xlim([0, orig.shape[0]])
     axarr[0].set_ylim([-np.max(np.abs(orig)),np.max(np.abs(orig))])
     axarr[1].set_ylim([-np.max(np.abs(rec)),np.max(np.abs(rec))])
 
@@ -1019,36 +1015,49 @@ if __name__=="__main__":
         axes.spines['top'].set_visible(False)
         axes.spines['bottom'].set_visible(False)
 
-    # Rotate x-axis labels for waveforms
-    axarr[1].set_xticks(xts)
-    axarr[1].set_xticklabels(words, rotation=90)
+"""The similarity in the structure and spacing of these peaks suggests that the reconstruction closely mimics the original signal's temporal characteristics. However, discrepancies in amplitude and waveform shape are evident, implying some loss of detail through the reconstruction process."""
 
-"""## 4.2 Deep learning Model
+# Let's Listen to the original audio
+
+from IPython.display import Audio
+
+original_audio = Audio('/content/features/sub-06_orig_audio.wav')
+original_audio
+
+# Let's Listen to the Synthesized audio
+
+from IPython.display import Audio
+
+synthesized_audio = Audio('/content/results/sub-06_orig_synthesized.wav')
+synthesized_audio
+
+# Let's Listen to the Precicted audio
+
+from IPython.display import Audio
+
+predicted_audio = Audio('/content/results/sub-06_predicted.wav')
+predicted_audio
+
+"""As we can check, the 'synthesized' and 'predicted' audio closely match the original audio in terms of temporal alignment, but there appears to be an excess of low-frequency content, affecting the tonal quality."
+
+## **4.3 Deep learning Model**
 
 **Deep Learning Model:** SpectrogramReconstructionNet
 
-**Framework:** Implemented in PyTorch.
+**Framework:** Implemented using PyTorch.
 
-**Function:** Takes corrupted spectrograms as input and outputs reconstructed versions.
+**Function:** The model is designed to accept sEEG (scalp electroencephalography) data as input and generate corresponding spectrograms as output.
 
 **Loss Function:** Mean Absolute Error (MAE) for training.
 
 **Evaluation Metric:** Employs R-squared (R^2) for performance evaluation.
 
-**Training Goal:** To learn to denoise or correct spectrograms effectively.
+**Training Goal:** The primary objective is to train the model to reconstruct spectrograms from sEEG data effectively.
 
-The model is part of a training pipeline where it's expected to be trained on pairs of corrupted and clean spectrograms to learn the reconstruction task.
+**Training Pipeline:** As part of the training pipeline, the model is expected to be trained on sEEG data with the goal of predicting the associated spectrogram accurately. This is to facilitate the understanding of the relationship between raw sEEG signals and their transformed representation in the frequency domain, as showed by spectrograms.
 
+This code defines a process for optimizing a deep learning model that reconstructs spectrograms from input features. It loads the data, splits it into training, validation, and test sets, and then standardizes the features. A PyTorch model, SpectrogramReconstructionNet, is defined with a simple two-layer neural network. The model's architecture and training are set up using PyTorch Lightning, a library that simplifies deep learning code.
 """
-
-import torch
-import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-import pytorch_lightning as pl
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import os
-import numpy as np
 
 # Load your spectrogram data and labels here
 feat_path = "/content/features"
@@ -1151,13 +1160,568 @@ mlp_result_df.to_csv('mlp_results.csv', index=False)
 
 pd.read_csv('/content/mlp_results.csv')
 
-"""1. **Mean Absolute Error (MAE)** = 0.3268, This indicates that the model's predictions are 0.3268 units away from the actual data points in the test set. The interpretation of this value depends on the scale of your output variable.
+"""1. **Mean Absolute Error (MAE)** = 0.308922, This indicates that the model's predictions are 0.308922 units away from the actual data points in the test set.
 
-2. **R-squared (R² Score)** = 0.950177: The R² score is very close to 1, which suggests that the model does an excellent job of capturing the variance in your test data. Approximately 95% of the variance in the dependent variable is predictable from the independent variables.This model fits the test data well.
+2. **R-squared (R² Score)** = 0.955601: The R² score is very close to 1, which suggests that the model does an excellent job of capturing the variance in the test data. Approximately 96% of the variance in the dependent variable is predictable from the independent variables.This model fits the test data well.
+"""
 
-## 4.3 Evaluation
+# Shape of the Original Spectogram
 
-### 4.3.1 For Linear Regression Model
+spectrogram = np.load(os.path.join(feat_path, 'sub-06_spec.npy'))
+print(spectrogram.shape)
+
+# Shape of mlp_predictions
+
+print("Shape of mlp_predictions:", mlp_predictions.shape)
+
+# Comparing Original Spectrogram vs. Predicted
+
+num_time_frames = 6000
+
+# Extract a segment of the spectrogram
+original_segment = y_test[:num_time_frames, :]
+reconstructed_segment = mlp_predictions[:num_time_frames, :]
+
+# Plotting
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+
+# Original Spectrogram Segment
+im0 = axes[0].imshow(original_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[0].set_title('Original Spectrogram Segment')
+axes[0].set_xlabel('Time Frame')
+axes[0].set_ylabel('Frequency Bin')
+fig.colorbar(im0, ax=axes[0], orientation='vertical', label='Decibels (dB)')
+
+
+# Reconstructed Spectrogram Segment
+im1 = axes[1].imshow(reconstructed_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[1].set_title('Predicted Spectrogram Segment')
+axes[1].set_xlabel('Time Frame')
+axes[1].set_ylabel('Frequency Bin')
+fig.colorbar(im1, ax=axes[1], orientation='vertical', label='Decibels (dB)')
+
+plt.tight_layout()
+plt.show()
+
+"""The consistency in patterns across both spectrograms suggests that the predictive model has successfully captured the spectral characteristics of the original signal. This visual similarity is indicative of the model's effectiveness in replicating the key features of the audio content
+
+#### **4.3.1 Optimization**
+
+Optuna, a hyperparameter optimization framework, is used to find the best learning rate and hidden layer size for the model by minimizing the validation loss, which is measured using mean squared error (MSE). After running trials, the best hyperparameters are extracted and can be used to fine-tune the model's performance on the task of spectrogram reconstruction.
+"""
+
+# Load your spectrogram data and labels here
+feat_path = "/content/features"
+spectrogram = np.load(os.path.join(feat_path, 'sub-06_spec.npy'))
+data = np.load(os.path.join(feat_path, f'{pt}_feat.npy'))
+labels = np.load(os.path.join(feat_path, f'{pt}_procWords.npy'))
+
+# Split the data into training, validation, and test sets
+X_train, X_temp, y_train, y_temp = train_test_split(data, spectrogram, test_size=0.3, random_state=42)
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
+# Standardize the input data
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
+
+# Convert data to PyTorch tensors
+X_train_tensor = torch.from_numpy(X_train).float()
+y_train_tensor = torch.from_numpy(y_train).float()
+X_val_tensor = torch.from_numpy(X_val).float()
+y_val_tensor = torch.from_numpy(y_val).float()
+X_test_tensor = torch.from_numpy(X_test).float()
+y_test_tensor = torch.from_numpy(y_test).float()
+
+# Create PyTorch datasets and data loaders
+train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
+
+batch_size = 32
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+# Define the neural network architecture
+class SpectrogramReconstructionNet(pl.LightningModule):
+    def __init__(self, input_dim, output_dim, hidden_dim=64, lr=0.001):
+        super(SpectrogramReconstructionNet, self).__init__()
+        self.save_hyperparameters()
+        self.lr = lr
+        self.layers = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
+        self.loss = nn.MSELoss()
+
+    def forward(self, x):
+        return self.layers(x)
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y)
+        self.log('val_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+
+# Objective function for Optuna
+def objective(trial):
+    # Sample hyperparameters
+    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
+    hidden_dim = trial.suggest_int('hidden_dim', 32, 128)
+
+    # Initialize the model with sampled hyperparameters
+    model = SpectrogramReconstructionNet(input_dim=X_train.shape[1], output_dim=spectrogram.shape[1], hidden_dim=hidden_dim, lr=lr)
+
+    # Initialize the trainer
+    trainer = pl.Trainer(max_epochs=50)
+
+    # Train the model
+    trainer.fit(model, train_loader, val_loader)
+
+    # Validate the model
+    model.eval()
+    y_pred_list = []
+
+    with torch.no_grad():
+        for batch in val_loader:
+            x_val, y_val = batch
+            y_pred = model(x_val)
+            y_pred_list.append(y_pred)
+
+    y_pred_tensor = torch.cat(y_pred_list)
+    y_val_np = y_val_tensor.numpy()
+    y_pred_np = y_pred_tensor.numpy()
+
+    # Calculate validation loss (you can use any other metric you want to optimize)
+    val_loss = nn.MSELoss()(y_pred_tensor, y_val_tensor)
+
+    return val_loss.item()
+
+# Run Optuna optimization
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=10)
+
+# Get the best hyperparameters
+best_params = study.best_params
+best_lr = best_params['lr']
+best_hidden_dim = best_params['hidden_dim']
+
+"""Now we will train a deep learning model named SpectrogramReconstructionNet using the best hyperparameters identified from previous optimization steps. It uses these hyperparameters to fit the model on the training and validation datasets, then evaluates its performance on the test set by predicting and calculating the Mean Absolute Error (MAE) and R-squared (R²) metrics.
+
+This process ensures the model is validated against unseen data and provides a quantitative assessment of its predictive accuracy.
+"""
+
+# Train the final model with the best hyperparameters
+final_model = SpectrogramReconstructionNet(input_dim=X_train.shape[1], output_dim=spectrogram.shape[1], hidden_dim=best_hidden_dim, lr=best_lr)
+final_trainer = pl.Trainer(max_epochs=50)
+final_trainer.fit(final_model, train_loader, val_loader)
+
+# Move test data to PyTorch tensor and move to the appropriate device
+X_test_tensor = torch.from_numpy(X_test).float()
+y_test_tensor = y_test_tensor.to(device)  # No need to convert again
+
+# Make predictions with the final_model on the test set
+final_model.eval()
+with torch.no_grad():
+    final_predictions = final_model(X_test_tensor).squeeze().cpu().numpy()
+
+# Calculate MAE and R-squared for the final model
+final_mae = mean_absolute_error(y_test_tensor.cpu().numpy(), final_predictions)
+final_r2 = r2_score(y_test_tensor.cpu().numpy(), final_predictions)
+
+# Create a DataFrame to store the final results
+final_result_df = pd.DataFrame({'MAE': [final_mae], 'R2 Score': [final_r2]})
+
+# Save the final results to a CSV file
+final_result_df.to_csv('final_results.csv', index=False)
+
+pd.read_csv('/content/final_results.csv')
+
+"""**The final model, optimized using Optuna**, achieved a Mean Absolute Error (MAE) of 0.283143 and an R-squared (R²) score of 0.964116.
+- The MAE of 0.283143 indicates that, on average, the model's predictions are approximately 0.283143 units away from the actual values. This level of error reflects a high degree of accuracy in the model's predictions.
+- The R² score of 0.964116 suggests that the model explains approximately 96% of the variance in the dependent variable. This high score indicates a strong predictive ability and suggests that the model captures most of the variability in the data.
+
+**Comparison with Initial Results (Without Optuna):**
+- Initial Model Performance:
+  - Before applying Optuna, the model achieved an MAE of 0.308922 and an R² score of 0.955601.
+  - Comparatively, the initial model had a slightly higher error rate and a marginally lower proportion of variance explained.
+
+- Improvement Observed:
+  - The application of Optuna for hyperparameter optimization led to a noticeable improvement in the model's performance.
+  - The reduction in MAE, although seemingly small, is significant in the context of model accuracy. This reduction indicates a more precise prediction capability of the optimized model.
+  - The increase in the R² score demonstrates that the optimized model better captures the variability in the spectrogram data, enhancing its reliability and predictive power.
+"""
+
+original_spec = np.load(os.path.join(feat_path, 'sub-06_spec.npy'))
+print("Shape of original spectrogram:", original_spec.shape)
+print("Shape of mlp_predictions:", mlp_predictions.shape)
+print("Shape of final_predictions:", final_predictions.shape)
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Assuming num_time_frames is the same for all spectrograms
+num_time_frames = 5000
+
+# Extract a segment of the spectrogram
+original_segment = y_test[:num_time_frames, :]
+mlp_predicted_segment = mlp_predictions[:num_time_frames, :]
+final_predicted_segment = final_predictions[:num_time_frames, :]
+
+# Plotting
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+# Original Spectrogram Segment
+axes[0].imshow(original_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[0].set_title('Original Spectrogram Segment')
+axes[0].set_xlabel('Time Frame')
+axes[0].set_ylabel('Frequency Bin')
+
+# MLP Predicted Spectrogram Segment
+axes[1].imshow(mlp_predicted_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[1].set_title('MLP Predicted Spectrogram Segment')
+axes[1].set_xlabel('Time Frame')
+axes[1].set_ylabel('Frequency Bin')
+
+# Final Model Predicted Spectrogram Segment
+axes[2].imshow(final_predicted_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[2].set_title('Final Model Predicted Spectrogram Segment')
+axes[2].set_xlabel('Time Frame')
+axes[2].set_ylabel('Frequency Bin')
+
+plt.tight_layout()
+plt.show()
+
+"""All three spectrograms are similar in appearance, with vertical striations indicating periodic energy fluctuations typical of speech signals. The uniformity across the spectrograms suggests that both the MLP and the final model have captured the general patterns and characteristics of the original signal.
+
+## **4.4 More complex Deep Learning model test**
+
+### **4.4.1 SpectrogramReconstructionNetCNN**
+
+The SpectrogramReconstructionNetCNN is a convolutional neural network (CNN) designed for spectrogram reconstruction.
+
+The model consists of two convolutional layers with max-pooling operations, followed by two fully connected layers. The convolutional layers aim to capture hierarchical features in the input spectrogram data, while the fully connected layers process the flattened output to generate the final reconstruction.
+
+ReLU activation functions are used after each convolutional layer and the first fully connected layer to introduce non-linearity. The model is trained using the mean squared error loss and optimized with the AdamW optimizer.
+
+This architecture is particularly suited for tasks involving the reconstruction of spectrogram data.
+"""
+
+import torch
+import torch.nn as nn
+import pytorch_lightning as pl
+from torch.utils.data import TensorDataset, DataLoader
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import os
+import numpy as np
+import pandas as pd
+
+# Load your spectrogram data and labels here
+feat_path = "/content/features"
+spectrogram = np.load(os.path.join(feat_path, 'sub-06_spec.npy'))
+data = np.load(os.path.join(feat_path, f'{pt}_feat.npy'))
+labels = np.load(os.path.join(feat_path, f'{pt}_procWords.npy'))
+
+# Split the data into training, validation, and test sets
+X_train, X_temp, y_train, y_temp = train_test_split(data, spectrogram, test_size=0.3, random_state=42)
+X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, random_state=42)
+
+# Standardize the input data
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
+
+# Convert data to PyTorch tensors
+X_train_tensor = torch.from_numpy(X_train).float()
+y_train_tensor = torch.from_numpy(y_train).float()
+X_val_tensor = torch.from_numpy(X_val).float()
+y_val_tensor = torch.from_numpy(y_val).float()
+X_test_tensor = torch.from_numpy(X_test).float()
+y_test_tensor = torch.from_numpy(y_test).float()
+
+# Create PyTorch datasets and data loaders
+train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+val_dataset = TensorDataset(X_val_tensor, y_val_tensor)
+test_dataset = TensorDataset(X_test_tensor, y_test_tensor)
+
+batch_size = 32
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
+
+# Define the neural network architecture with CNN layers
+class SpectrogramReconstructionNetCNN(pl.LightningModule):
+    def __init__(self, input_dim, output_dim, hidden_dim=64, lr=0.001):
+        super(SpectrogramReconstructionNetCNN, self).__init__()
+        self.save_hyperparameters()
+        self.lr = lr
+        self.conv_layers = nn.Sequential(
+            nn.Conv1d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2),
+            nn.Conv1d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool1d(kernel_size=2, stride=2)
+        )
+        self.fc_layers = nn.Sequential(
+            nn.Linear(64 * (input_dim // 4), hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim)
+        )
+        self.loss = nn.MSELoss()
+
+    def forward(self, x):
+        x = self.conv_layers(x.unsqueeze(1))  # Add a channel dimension for 1D convolution
+        x = x.view(x.size(0), -1)  # Flatten the output for fully connected layers
+        return self.fc_layers(x)
+
+
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y)
+        self.log('val_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        return torch.optim.AdamW(self.parameters(), lr=self.lr)
+
+# Initialize the model, trainer, and callbacks
+model_cnn = SpectrogramReconstructionNetCNN(input_dim=X_train.shape[1], output_dim=spectrogram.shape[1], hidden_dim=64, lr=0.001)
+callback_cnn = pl.callbacks.ModelCheckpoint(
+    monitor='val_loss',
+    dirpath='',
+    filename='best_model_cnn',
+    save_top_k=1,
+    mode='min'
+)
+trainer_cnn = pl.Trainer(max_epochs=50, callbacks=[callback_cnn])
+
+# Train the model
+trainer_cnn.fit(model_cnn, train_loader, val_loader)
+
+"""
+This code loads a trained CNN model, evaluates it on a test dataset, and calculates the Mean Absolute Error (MAE) and R-squared (R²) metrics for its predictions."""
+
+from sklearn.metrics import mean_absolute_error, r2_score
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+# The best_model is loaded from the checkpoint
+best_model = SpectrogramReconstructionNetCNN.load_from_checkpoint('best_model_cnn.ckpt')
+best_model = best_model.to(device)
+best_model.eval()
+
+# Move test data to PyTorch tensor and move to the appropriate device
+X_test_tensor = torch.from_numpy(X_test).float().to(device)
+y_test_tensor = y_test_tensor.to(device)  # No need to convert again
+
+# Make predictions with the best_model on the test set
+with torch.no_grad():
+    cnn_predictions = best_model(X_test_tensor).squeeze().cpu().numpy()
+
+# Calculate MAE and R-squared
+cnn_mae = mean_absolute_error(y_test_tensor.cpu().numpy(), cnn_predictions)
+cnn_r2 = r2_score(y_test_tensor.cpu().numpy(), cnn_predictions)
+
+# Create a DataFrame to store the results
+cnn_result_df = pd.DataFrame({'MAE': [cnn_mae], 'R2 Score': [cnn_r2]})
+
+# Save the results to a CSV file
+cnn_result_df.to_csv('cnn_results.csv', index=False)
+
+pd.read_csv('/content/cnn_results.csv')
+
+"""The given values represent the performance metrics of a model's predictions compared to actual data, with a Mean Absolute Error (MAE) of approximately 0.323 and an R-squared (R²) score of about 0.95.
+- The MAE indicates that, on average, the model's predictions are about 0.323 units away from the actual values.
+- The R² score suggests that approximately 95% of the variance in the dependent variable is predictable from the independent variables, denoting a high level of model accuracy.
+"""
+
+# Comparing Original Spectrogram vs. Predicted
+
+num_time_frames = 6000
+
+# Extract a segment of the spectrogram
+original_segment = y_test[:num_time_frames, :]
+reconstructedCNN_segment = cnn_predictions[:num_time_frames, :]
+
+# Plotting
+fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+
+# Original Spectrogram Segment
+im0 = axes[0].imshow(original_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[0].set_title('Original Spectrogram Segment')
+axes[0].set_xlabel('Time Frame')
+axes[0].set_ylabel('Frequency Bin')
+fig.colorbar(im0, ax=axes[0], orientation='vertical', label='Decibels (dB)')
+
+
+# Reconstructed Spectrogram Segment
+im1 = axes[1].imshow(reconstructedCNN_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[1].set_title('CNN Predicted Spectrogram Segment')
+axes[1].set_xlabel('Time Frame')
+axes[1].set_ylabel('Frequency Bin')
+fig.colorbar(im1, ax=axes[1], orientation='vertical', label='Decibels (dB)')
+
+plt.tight_layout()
+plt.show()
+
+"""Both spectrograms display the frequency information on the y-axis and the progression of time on the x-axis, with color intensity representing the decibel levels.
+
+The similarity in the visual patterns between the two suggests that the CNN model has managed to approximate the original spectrogram's structure reasonably well.
+
+**Why we apply CNN?**
+
+Convolutional Neural Networks (CNNs) are well-suited for spectrogram reconstruction tasks for several reasons:
+
+- Hierarchical Feature Extraction: Spectrograms often exhibit hierarchical features, where low-level features like edges and textures combine to form higher-level representations. CNNs, with their convolutional layers and pooling operations, are effective in capturing these hierarchical features.
+
+- Translation Invariance: CNNs are inherently translation-invariant, meaning they can recognize patterns regardless of their position in the input. In the context of spectrogram data, where specific frequency patterns may occur at different time points, this property is beneficial for capturing relevant features irrespective of their temporal location.
+
+- Local Connectivity: The convolutional layers in CNNs focus on local connectivity, meaning they learn patterns within small receptive fields. In spectrogram data, local patterns and structures are crucial for understanding the frequency content over time, and CNNs are well-suited for capturing such local dependencies.
+
+- Parameter Sharing: CNNs utilize parameter sharing, where the same set of weights is used across different spatial locations. This reduces the number of parameters and enhances the model's ability to generalize well to unseen data. In the case of spectrograms, where similar frequency patterns may appear at different times, parameter sharing is advantageous.
+
+- Spatial Hierarchy: CNNs naturally capture spatial hierarchies through their architecture. In the case of spectrogram data, this spatial hierarchy is valuable for discerning complex frequency patterns at different resolutions.
+
+- Non-Linearity: CNNs introduce non-linearities through activation functions like ReLU, allowing the model to capture complex relationships in the data.
+
+In summary, the spatial and hierarchical nature of CNNs makes them particularly effective for tasks involving spectrogram reconstruction, where understanding patterns across both time and frequency domains is essential.
+
+### **4.4.2 Hyperparameter Optimization for SpectrogramReconstructionNetCNN model.**
+
+This hyperparameter optimization structure uses the Optuna library to search for optimal hyperparameters for the SpectrogramReconstructionNetCNN model.
+
+The objective function samples hyperparameters such as learning rate (lr) and hidden dimension (hidden_dim), initializes the model with these sampled hyperparameters, and trains it using PyTorch Lightning's Trainer.
+
+The training process is repeated for multiple trials (10 in this case) to find the hyperparameters that minimize the validation loss. The best hyperparameters are then extracted from the study results, and a final model is trained using these optimal values.
+
+This approach aims to automate the process of hyperparameter tuning to enhance the model's performance on the validation set.
+"""
+
+import optuna
+def objective(trial):
+    # Sample hyperparameters
+    lr = trial.suggest_loguniform('lr', 1e-5, 1e-1)
+    hidden_dim = trial.suggest_int('hidden_dim', 32, 128)
+
+    # Initialize the model with sampled hyperparameters
+    model = SpectrogramReconstructionNetCNN(input_dim=X_train.shape[1], output_dim=spectrogram.shape[1], hidden_dim=hidden_dim, lr=lr)
+
+    # Initialize the trainer
+    trainer = pl.Trainer(max_epochs=50)
+
+    # Train the model
+    trainer.fit(model, train_loader, val_loader)
+
+    # Validate the model
+    model.eval()
+    y_pred_list = []
+
+    with torch.no_grad():
+        for batch in val_loader:
+            x_val, y_val = batch
+            y_pred = model(x_val)
+            y_pred_list.append(y_pred)
+
+    y_pred_tensor = torch.cat(y_pred_list)
+    y_val_np = y_val_tensor.numpy()
+    y_pred_np = y_pred_tensor.numpy()
+
+    # Calculate validation loss (you can use any other metric you want to optimize)
+    val_loss = nn.MSELoss()(y_pred_tensor, y_val_tensor)
+
+    return val_loss.item()
+
+# Run Optuna optimization
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=10)
+
+# Get the best hyperparameters
+best_params = study.best_params
+best_lr = best_params['lr']
+best_hidden_dim = best_params['hidden_dim']
+
+# Train the final model with the best hyperparameters
+final_model = SpectrogramReconstructionNetCNN(input_dim=X_train.shape[1], output_dim=spectrogram.shape[1], hidden_dim=best_hidden_dim, lr=best_lr)
+final_trainer = pl.Trainer(max_epochs=50)
+final_trainer.fit(final_model, train_loader, val_loader)
+
+# Move test data to PyTorch tensor and move to the appropriate device
+X_test_tensor = torch.from_numpy(X_test).float()
+y_test_tensor = y_test_tensor.to(device)
+
+# Make predictions with the best_model on the test set
+final_model.eval()
+with torch.no_grad():
+    finalcnn_predictions = final_model(X_test_tensor).squeeze().cpu().numpy()
+
+# Calculate MAE and R-squared
+finalcnn_mae = mean_absolute_error(y_test_tensor.cpu().numpy(), finalcnn_predictions)
+finalcnn_r2 = r2_score(y_test_tensor.cpu().numpy(), finalcnn_predictions)
+
+# Create a DataFrame to store the results
+finalcnn_result_df = pd.DataFrame({'MAE': [finalcnn_mae], 'R2 Score': [finalcnn_r2]})
+
+# Save the results to a CSV file
+finalcnn_result_df.to_csv('finalcnn_results.csv', index=False)
+pd.read_csv('/content/finalcnn_results.csv')
+
+num_time_frames = 5000
+
+# Extract a segment of the spectrogram
+original_segment = y_test[:num_time_frames, :]
+cnn_predicted_segment = cnn_predictions[:num_time_frames, :]
+finalcnn_predicted_segment = finalcnn_predictions[:num_time_frames, :]
+
+# Plotting
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+# Original Spectrogram Segment
+axes[0].imshow(original_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[0].set_title('Original Spectrogram Segment')
+axes[0].set_xlabel('Time Frame')
+axes[0].set_ylabel('Frequency Bin')
+
+# MLP Predicted Spectrogram Segment
+axes[1].imshow(cnn_predicted_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[1].set_title('CNN Predicted Spectrogram Segment')
+axes[1].set_xlabel('Time Frame')
+axes[1].set_ylabel('Frequency Bin')
+
+# Final Model Predicted Spectrogram Segment
+axes[2].imshow(finalcnn_predicted_segment.T, aspect='auto', origin='lower', cmap='viridis')
+axes[2].set_title('Final CNN Predicted Spectrogram Segment')
+axes[2].set_xlabel('Time Frame')
+axes[2].set_ylabel('Frequency Bin')
+
+plt.tight_layout()
+plt.show()
+
+"""## **4.5 Evaluation**
+
+### 4.5.1 For Linear Regression Model
 """
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -1192,104 +1756,124 @@ print("R2 Score:", r2)
 
 In conclusion, these metrics suggest that the model has achieved a satisfactory level of predictive accuracy.
 
-### 4.3.2 For Deep Learning Model
+### 4.5.2 For Deep Learning Model
 """
 
-#Let's make sure X_train is a 2D array with shape
-print(X_train.shape)
+#Deep Learning Model: SpectrogramReconstructionNet
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.metrics import MeanAbsoluteError, MeanSquaredError
+pd.read_csv('/content/mlp_results.csv')
 
-# Determine the number of input features from X_train
-num_input_features = X_train.shape[1]  # X_train is a 2D array with shape (n_samples = 20995, n_features = 1143)
+#Deep Learning Model: SpectrogramReconstructionNet Optimized with Optuna
 
-# Define the model
-model = Sequential()
-model.add(Dense(64, activation='relu', input_shape=(num_input_features,)))
-model.add(Dense(1, activation='linear'))
+pd.read_csv('/content/final_results.csv')
 
-# Compile the model with additional metrics
-model.compile(optimizer='adam',
-              loss='mean_squared_error',
-              metrics=[MeanAbsoluteError(), MeanSquaredError()])
+#Deep Learning Model: SpectrogramReconstructionNetCNN
 
-# Fit the model on the training data
-history = model.fit(X_train, y_train, epochs=8, validation_split=0.2)
+pd.read_csv('/content/cnn_results.csv')
 
-# Evaluate the model on the test data
-evaluation_results = model.evaluate(X_test, y_test)
+#Deep Learning Model: SpectrogramReconstructionNetCNN optimized with Optuna
 
-print("Evaluation Results:", evaluation_results)
+pd.read_csv('/content/finalcnn_results.csv')
 
-"""The network's architecture was designed for regression, featuring a sequential layout with densely connected layers. The training process was conducted over 8 epochs with a validation set split of 20%.
+"""**1. Model Performance Comparison:**
 
-**Training Performance**
+- SpectrogramReconstructionNet (Original vs. Optimized): The optimized version with Optuna shows improvement in both Mean Absolute Error (MAE) and R² Score compared to the non-optimized version. This indicates that hyperparameter optimization has positively impacted the model's performance.
 
-The training process started with initial high loss and mean absolute error (MAE), with values of 2.9254 and 1.2167 respectively. This initial performance is expected as the network began learning from a random state of initialization.
+- SpectrogramReconstructionNetCNN (Original vs. Optimized): Similar to the SpectrogramReconstructionNet, the optimized CNN model also shows improvement in both MAE and R² Score. This highlights the effectiveness of hyperparameter optimization for CNN architectures as well.
 
-As training progressed through the epochs, both the training loss and MAE displayed a consistent downward trend. By the second epoch, the loss was reduced to 1.3043, and MAE to 0.7963, indicative of the model's ability to learn and adapt to the dataset.
+**2. Interpreting the Metrics:**
 
-By the conclusion of the 8th epoch, the model had further refined its performance, achieving a training loss of 0.9682 and MAE of 0.6288. The validation metrics paralleled this improvement, closing at a validation loss of 1.0418 and MAE of 0.6721, affirming the model's capacity to generalize beyond the training data.
+- Mean Absolute Error (MAE): Lower MAE values indicate better model performance. It measures the average magnitude of errors in a set of predictions, without considering their direction.
 
-**Test Data Evaluation**
+- R² Score: This metric provides a sense of how well future samples are likely to be predicted by the model. An R² Score closer to 1 indicates better model performance. The optimized models have higher R² scores, suggesting they are better at predicting the target variable.
 
-The model resulted in a loss of 1.0691 and an MAE of 0.6832. These results are consistent with the performance metrics observed during the validation phase, suggesting that the model retains its predictive accuracy when applied to new data.
+**3.Model Selection:**
 
-The marginal elevation in loss and MAE observed on the test data, as opposed to the validation data, falls within a reasonable range of variability, suggesting that the model has not significantly overfitted to the training data.
+Based on these metrics, the 'SpectrogramReconstructionNet Optimized with Optuna' seems to be the best performing model.
 
-We have chosen to limit our model training to 8 epochs based on the observed performance metrics, which suggest that extending the number of epochs could lead to overfitting the training data. This decision is supported by the stabilization of loss and validation metrics, which show diminishing improvements beyond this point.
+# **6. Spectrogram Reconstruction**
 
-**Conclusion**
-
-The results demonstrate the neural network's successful training and generalization capabilities. The consistent decrease in loss and MAE metrics during training, followed with comparable performance on the validation and test datasets, signifies a well-fitting model.
-
+The SpectrogramReconstructionNet, a deep learning model, is utilized to transform neural representations into audible spectrograms. After loading its trained weights, the model processes standardized input features to reconstruct a spectrogram. This output is then saved, showcasing the model's capacity to approximate auditory experiences from brain activity.
 """
 
-# Extract the history values for plotting
-loss = history.history['loss']
-val_loss = history.history['val_loss']
-mae = history.history['mean_absolute_error']
-val_mae = history.history['val_mean_absolute_error']
-mse = history.history['mean_squared_error']
-val_mse = history.history['val_mean_squared_error']
+# Path to the trained model checkpoint
+model_checkpointpath = '/content/best_model.ckpt'
 
-epochs = range(1, len(loss) + 1)
+# Load the trained model weights from the checkpoint
+best_model = SpectrogramReconstructionNet.load_from_checkpoint(model_checkpointpath)
 
-# Plot training & validation loss values
-plt.figure(figsize=(14, 4))
+# Set the model to evaluation mode
+model.eval()
 
-plt.subplot(1, 3, 1)
-plt.plot(epochs, loss, 'b-', label='Training Loss')
-plt.plot(epochs, val_loss, 'r--', label='Validation Loss')
-plt.title('Training and Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
+# Load your input features for reconstruction
+input_features_path = '/content/features/sub-06_feat.npy'
+input_features = np.load(input_features_path)
 
-# Plot training & validation MAE values
-plt.subplot(1, 3, 2)
-plt.plot(epochs, mae, 'b-', label='Training MAE')
-plt.plot(epochs, val_mae, 'r--', label='Validation MAE')
-plt.title('Training and Validation MAE')
-plt.xlabel('Epochs')
-plt.ylabel('MAE')
-plt.legend()
+# Standardize the input features
+input_features = scaler.transform(input_features)
 
-# Plot training & validation MSE values
-plt.subplot(1, 3, 3)
-plt.plot(epochs, mse, 'b-', label='Training MSE')
-plt.plot(epochs, val_mse, 'r--', label='Validation MSE')
-plt.title('Training and Validation MSE')
-plt.xlabel('Epochs')
-plt.ylabel('MSE')
-plt.legend()
+# Convert to torch tensor and add batch dimension if necessary
+input_tensor = torch.from_numpy(input_features).float().unsqueeze(0)
 
-plt.tight_layout()
+# Perform spectrogram reconstruction
+with torch.no_grad():
+    final_reconstructed_spectrogram = model(input_tensor)
+
+# Convert to numpy array for visualization
+final_reconstructed_spectrogram = final_reconstructed_spectrogram.T.numpy().squeeze()
+
+# Save the predicted spectrogram to a file
+predicted_spectrogram_path = '/content/results/DLpredicted_spectrogram.npy'
+np.save(predicted_spectrogram_path, final_reconstructed_spectrogram)
+
+# Set the figure size
+plt.figure(figsize=(18, 4))
+
+# Visualize the reconstructed spectrogram with transposed axes
+plt.imshow(final_reconstructed_spectrogram, cmap='viridis', aspect='auto', origin='lower')
+plt.title('Reconstructed Spectrogram with Deep Learning Model: SpectrogramReconstructionNet')
+plt.xlabel('Time Frame')
+plt.ylabel('Frequency Bin')
+plt.colorbar(label='Amplitude')
 plt.show()
 
-"""## 5. Defining the Software Environment"""
+original_spec = np.load('/content/features/sub-06_spec.npy')
+# Plot original spectrogram
+plt.figure(figsize=(18, 4))
+plt.imshow(original_spec.T, aspect='auto', origin='lower', cmap='viridis')
+plt.colorbar(label='Amplitude')
+plt.title('Original Spectrogram')
+plt.xlabel('Time Frame')
+plt.ylabel('Frequency Bin')
+
+final_reconstructed_spectrogram_sliced = final_reconstructed_spectrogram[:, :1400]
+original_spec = np.load('/content/features/sub-06_spec.npy')
+original_spec_sliced = original_spec[:1400, :]
+
+# Set the figure size for subplots
+plt.figure(figsize=(18, 8))
+
+# Plot the sliced reconstructed spectrogram
+plt.subplot(2, 1, 1)
+plt.imshow(final_reconstructed_spectrogram_sliced, cmap='viridis', aspect='auto', origin='lower')
+plt.title('Reconstructed Spectrogram - First 1400 Time Frames')
+plt.xlabel('Time Frame')
+plt.ylabel('Frequency Bin')
+plt.colorbar(label='Amplitude')
+
+# Plot the sliced original spectrogram
+plt.subplot(2, 1, 2)
+plt.imshow(original_spec_sliced.T, aspect='auto', origin='lower', cmap='viridis')
+plt.title('Original Spectrogram - First 1400 Time Frames')
+plt.xlabel('Time Frame')
+plt.ylabel('Frequency Bin')
+plt.colorbar(label='Amplitude')
+
+# Display the plots
+plt.tight_layout()  # Adjust subplots to fit into the figure area.
+plt.show()
+
+"""# 6. Defining the Software Environment"""
 
 # Specify Requirements
 
