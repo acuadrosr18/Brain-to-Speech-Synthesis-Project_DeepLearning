@@ -43,16 +43,24 @@ In the **Brain-to-Speech-Synthesis-Project_DeepLearning** Github Repository we c
 Detailed instructions on how to run the pipeline are as follows:
 
 1. Installation:
- Ensure you have Python installed and then set up the environment using the `requirements.txt` file as shown above.
+Ensure you have Python installed and then set up the environment using the `requirements.txt` file as shown above.
  
 2. Data Loading:
- This notebook contains all necessary code to load the data.
+This notebook contains all necessary code to load the data.
  
 3. Model Training:
 This notebook contains all necessary code and displays the results inline.
 
 4. Evaluation:
 It will output evaluation metrics and optionally, visualizations comparing true values against predictions.
+
+5. Application:
+At the end, the best model will me applied to reconstruct a Spectrogram.
+
+As we can see in the images, the reconstruction of the Spectrogram was succesful, the model performance was effective.
+
+![image](https://github.com/acuadrosr18/Brain-to-Speech-Synthesis-Project_DeepLearning/assets/15305050/6809c140-dcd5-46e3-8c42-858ae35383e8)
+![image](https://github.com/acuadrosr18/Brain-to-Speech-Synthesis-Project_DeepLearning/assets/15305050/ddb67ac7-05d4-4e8a-96a1-23daf1b3947f)
 
 ### Running the Training
 This notebook includes:
@@ -66,4 +74,13 @@ For evaluation this code will:
 - Run the model against the test data.
 - Output the evaluation metrics.
 - Include visualizations of results.
+
+# Documentation:
+This project's documentation provides an overview of an approach to audio signal processing, specifically the reconstruction of spectrograms from neural data.
+
+It outlines our methods, from preprocessing to model evaluation, and discusses the practical applications of our findings. 
+
+Guide to the project setup, execution, and results, ensuring clarity and ease of use for future development and collaboration.
+
+[Brain-to-Speech-Synthesis Project Documentation](Brain-to-Speech-Synthesis-Project_DeepLearning.pdf)
 
